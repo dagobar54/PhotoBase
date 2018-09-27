@@ -13,6 +13,39 @@ from io import BytesIO
 import io
 from PyQt5 import QtCore, QtWidgets, QtGui, QtSql, uic
 
+class ImageDelegate(QtWidgets.QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        if index.column() == 7:
+            # Получение ссылки на изображение в иконке, если его нет, тогда вызывается родительский метод рисования
+            imgBytes = index.model().data(index)
+            if imgBytes is None:
+                super().paint(painter, option, index)
+                return
+            qImage = QtGui.QImage()
+            qImage.loadFromData(imgBytes)
+            # Получение размеров ячейки и растягивание иконки на размер ячейки
+            rect = option.rect
+            w = min(rect.size().width(), qImage.width())
+            h = min(rect.size().height(), qImage.height())
+            img = qImage.scaled(w, h, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
+
+            painter.drawPixmap(rect, QtGui.QPixmap.fromImage(qImage))
+
+            item_option = QtWidgets.QStyleOptionViewItem(option)
+
+        else:
+            QtWidgets.QStyledItemDelegate.paint(self,painter,option,index)
+
+        # Если хотим что-то дорисовать (например текст)
+        # super().paint(painter, option, index)
+    def sizeHint(self,option,index):
+        if index.column() == 7:
+            return QtWidgets.QSize(200,200)
+        else:
+            newsize = QtWidgets.QStyledItemDelegate.sizeHint(self, option, index)
+            print(newsize)
+            return newsize
+
 class ImagesBlob(QtWidgets.QMainWindow):
     def __init__(self, BaseName):
         super().__init__()
@@ -46,6 +79,10 @@ class ImagesBlob(QtWidgets.QMainWindow):
         #self.modelFolders.sel
         # self.tableViewFolders.setSelectionBehavior(self.tableViewFolders.SelectRows)
         self.tableViewImages.setModel(self.modelImages)
+        self.tableViewImages.verticalHeader().setDefaultSectionSize(self._height);
+        self.tableViewImages.horizontalHeader().setDefaultSectionSize(self._width);
+        id = ImageDelegate()
+        self.tableViewImages.setItemDelegate(id)
         smodel = self.tableViewImages.selectionModel()
         smodel.currentRowChanged.connect(self.folder_row_changed)
 
@@ -61,7 +98,7 @@ class ImagesBlob(QtWidgets.QMainWindow):
             qImage.loadFromData(picArray)
             w = qImage.width()
             h = qImage.height()
-            print(w,h)
+            #print(w,h)
             result = qImage.scaled(w, h)
             self.labelThumb.setPixmap(QtGui.QPixmap.fromImage(qImage))
             #self.labelThumb.setAlignment(QtGui.AlignCenter)
