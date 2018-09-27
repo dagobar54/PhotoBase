@@ -91,9 +91,11 @@ class ImagesForm(QtWidgets.QMainWindow):
         q.exec(s)
         self.modelFolders = QtSql.QSqlQueryModel()
         self.modelFolders.setQuery(s)
+        #self.modelFolders.sel
         # self.tableViewFolders.setSelectionBehavior(self.tableViewFolders.SelectRows)
         self.tableViewFolders.setModel(self.modelFolders)
         smodel = self.tableViewFolders.selectionModel()
+        smodel.currentRowChanged.connect(self.folder_row_changed)
 
 
         self.modelSubFolders = QtSql.QSqlQueryModel()
@@ -102,12 +104,12 @@ class ImagesForm(QtWidgets.QMainWindow):
         self.tableViewSubFolders.setModel(self.modelSubFolders)
         self.querySubFolders.prepare('select SubPath,cnt,FolderId from SubFolders_View where FolderId = ?')
         #self.refreshSubFolders(1)
-        smodel.currentRowChanged.connect(self.folder_row_changed)
+
 
         self.itemImagesModel = QtSql.QSqlQueryModel()
         self.queryImages = QtSql.QSqlQuery(self.db)
-
-        self.queryImages.prepare(' SELECT rowid,file,Folderid,SubPath,saved_at,State,FolderPath,thumb  FROM images_View where state = 0 and FolderId = ?')
+        #rowid,file,Folderid,SubPath,saved_at,State,FolderPath,
+        self.queryImages.prepare(' SELECT thumb  FROM images_View where state = 0 and FolderId = ? order by rowid')
         self.listViewImages.setModel(self.itemImagesModel)
         delegate = ImageDelegate()
         self.listViewImages.setItemDelegate(delegate)

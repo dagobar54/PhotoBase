@@ -94,7 +94,7 @@ class ImageScan:
         self._cur.execute('INSERT INTO Thumbnails (id,thumb)VALUES(?,?)',\
                               (rowid,lite.Binary(hex_data)))
             
-    def update_thumbnail(self):
+    def update_thumbnail(self,path,rowid):
         img = Image.open(path)
         self.resize_thumbnail(img)
         output = io.BytesIO()
