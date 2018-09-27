@@ -1,6 +1,17 @@
-from PyQt5 import QtCore, QtWidgets, QtGui, QtSql, uic
-import sys
+# -*- encoding: utf-8 -*-
+"""
+Поиск способов отобразить картинку из Blob
+"""
+import os
 import sqlite3 as lite
+import sys
+from datetime import datetime
+import time
+#import PIL
+from io import BytesIO
+#from PIL import Image, ImageDraw
+import io
+from PyQt5 import QtCore, QtWidgets, QtGui, QtSql, uic
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -33,10 +44,10 @@ class ImageDelegate(QtWidgets.QStyledItemDelegate):
             #img = qImage.scaled(w, h, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
             painter.save()
             if option.state & QStyle.State_Selected:
-                painter.setBrush(QtGui.QBrush(Qt.darkGray))
-                painter.setPen(QPen(Qt.cyan, 1, Qt.SolidLine))
+                painter.setBrush(QtGui.QBrush(Qt.blue))
+                painter.setPen(QPen(Qt.yellow, 1, Qt.SolidLine))
             else:
-                painter.setBrush(QtGui.QBrush(Qt.lightGray))
+                painter.setBrush(QtGui.QBrush(Qt.gray))
                 painter.setPen(QPen(Qt.black, 1, Qt.SolidLine))
             rectFrame = QtCore.QRect(rect.left() + 2, rect.top() + 2, rect.width() - 4, rect.height()-4)
             painter.drawRect(rectFrame)
@@ -68,48 +79,16 @@ class ImageDelegate(QtWidgets.QStyledItemDelegate):
             print(newsize)
             return newsize
 
-
-class ImageFiles:
-    def __init__(self, BaseName):
-        self._conn = lite.connect(BaseName)
-        self._cur = self._conn.cursor()
-
-class ImageListModel(QtCore.QAbstractItemModel):
-    def __init__(self, parent=None, *args):
-        super(ImageListModel, self).__init__()
-        self.datatable = None
-
-    def update(self, dataIn):
-        self.datatable = dataIn
-
-    def rowCount(self, parent=QtCore.QModelIndex()):
-        return len(self.datatable.index)
-
-    def columnCount(self, parent=QtCore.QModelIndex()):
-        return len(self.datatable.columns.values)
-
-    def data(self, index, role=QtCore.Qt.DisplayRole):
-        if role == QtCore.Qt.DisplayRole:
-            i = index.row()
-            j = index.column()
-            return '{0}'.format(self.datatable.iget_value(i, j))
-        else:
-            return QtCore.QVariant()
-
-    def flags(self, index):
-        return QtCore.Qt.ItemIsEnabled
-
-
-
-class ImagesForm(QtWidgets.QMainWindow):
+class ImagesList(QtWidgets.QMainWindow):
     def __init__(self, BaseName):
         super().__init__()
 
         # Set up the user interface from Designer.
-        uic.loadUi("expFiles.ui", self)
+        uic.loadUi("pictureListBase.ui", self)
 
         # self._conn = lite.connect(BaseName)
         # self._cur=self._conn.cursor()
+
         self.db = QtSql.QSqlDatabase.addDatabase("QSQLITE")
         self.db.setDatabaseName(BaseName)
         ok = self.db.open()
@@ -119,66 +98,48 @@ class ImagesForm(QtWidgets.QMainWindow):
 
         self._conn = lite.connect(BaseName)
         self._cur = self._conn.cursor()
+
         s = 'select DefaultThumbnailSizeX,DefaultThumbnailSizeY from DefaultParamValues'
         row = self._cur.execute(s).fetchone()
         self._width = int(row[0])
         self._height = int(row[1])
 
-        s = "select FolderPath,Description,rowid as id from PositiveFolders_View"
+        s = "SELECT rowid,file,Folderid,SubPath,saved_at,State,FolderPath,thumb  FROM images_View where state = 0 and FolderId=3"
         q = QtSql.QSqlQuery()
         q.exec(s)
-        self.modelFolders = QtSql.QSqlQueryModel()
-        self.modelFolders.setQuery(s)
-        #self.modelFolders.sel
-        # self.tableViewFolders.setSelectionBehavior(self.tableViewFolders.SelectRows)
-        self.tableViewFolders.setModel(self.modelFolders)
-        smodel = self.tableViewFolders.selectionModel()
-        smodel.currentRowChanged.connect(self.folder_row_changed)
-
-
-        self.modelSubFolders = QtSql.QSqlQueryModel()
-        self.tableViewSubFolders.setModel(self.modelSubFolders)
-        self.querySubFolders = QtSql.QSqlQuery(self.db)
-        self.tableViewSubFolders.setModel(self.modelSubFolders)
-        self.querySubFolders.prepare('select SubPath,cnt,FolderId from SubFolders_View where FolderId = ?')
-        #self.refreshSubFolders(1)
-
-
-        s = "SELECT rowid,file,Folderid,SubPath,saved_at,State,FolderPath,thumb  FROM images_View where state = 0 and FolderId=?"
-        self.queryImages = QtSql.QSqlQuery()
-        self.queryImages.prepare(s)
         self.modelImages = QtSql.QSqlQueryModel()
-        self.modelImages.setQuery(self.queryImages)
+        self.modelImages.setQuery(q)
         self.listViewImages.setModel(self.modelImages)
+        #self.listViewImages.verticalHeader().setDefaultSectionSize(self._height);
+        #self.tableViewImages.horizontalHeader().setDefaultSectionSize(self._width);
         id = ImageDelegate()
         self.listViewImages.setItemDelegate(id)
         smodel = self.listViewImages.selectionModel()
-        smodel.currentRowChanged.connect(self.image_index_changed)
+        smodel.currentRowChanged.connect(self.folder_row_changed)
 
     def folder_row_changed(self, newRowId, oldRowId):
         #print(oldRowId.row(), newRowId.row())
-        if newRowId.row() >= 0:
+        if newRowId.row() > 0:
             ind = int(newRowId.row())
-            id: int = int(self.modelFolders.record(ind).field("id").value())
-            #print(id)
-            self.refreshSubFolders(id)
-            self.refreshImages(id)
+            #index = QtCore.QModelIndex()
+            index =self.modelImages.index(ind, 7)
 
-    def refreshSubFolders(self, folderId):
-        self.querySubFolders.addBindValue(folderId)
-        self.querySubFolders.exec_()
-        self.modelSubFolders.setQuery(self.querySubFolders)
+            picArray = self.modelImages.data(index)#.value()#.toByteArray() #record(ind).field("thumb").value().toByteArray()
+            qImage = QtGui.QImage()
+            qImage.loadFromData(picArray)
+            w = qImage.width()
+            h = qImage.height()
+            #print(w,h)
+            result = qImage.scaled(w, h)
+            self.labelThumb.setPixmap(QtGui.QPixmap.fromImage(qImage))
+            #self.labelThumb.setAlignment(QtGui.AlignCenter)
 
-    def refreshImages(self, folderId):
-        self.queryImages.addBindValue(folderId)
-        self.queryImages.exec_()
-        self.modelImages.setQuery(self.queryImages)
 
-    def image_index_changed(self, newId, oldId):
-        print(oldId.row(), newId.row())
+
+
 
 app = QtWidgets.QApplication(sys.argv)
-ImForm = ImagesForm('NeoPhoto.sqlite')
+BlobForm = ImagesList('NeoPhoto.sqlite')
 
-ImForm.show()
+BlobForm.show()
 sys.exit(app.exec_())
